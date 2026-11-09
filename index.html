@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fido's Kente Quest</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation;
+        }
+        .font-fredoka {
+            font-family: 'Fredoka One', cursive;
+        }
+        .button-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .button-shadow:active {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transform: translateY(1px);
+        }
+        .command-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between; /* Pushes text and button apart */
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            font-size: 0.875rem;
+            background-color: #f3f4f6;
+        }
+        .remove-btn {
+            background: none;
+            border: none;
+            color: #ef4444; /* red-500 */
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 4px;
+            border-radius: 99px;
+        }
+        .remove-btn:hover {
+            color: #b91c1c; /* red-700 */
+            background-color: #fee2e2; /* red-100 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-4xl mx-auto">
+        <h1 class="text-4xl font-fredoka text-center text-gray-800 mb-4">Fido's Kente Quest</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Left Column: Challenge & Commands -->
+            <div class="md:col-span-1 bg-white p-4 rounded-xl shadow-lg flex flex-col space-y-4">
+                <div>
+                    <h2 id="challenge-title" class="text-2xl font-bold text-gray-700">Level 1</h2>
+                    <p id="challenge-text" class="text-gray-600 mt-1">Help Fido reach the Kente cloth!</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-700 mb-2">Command Sequence</h3>
+                    <div id="command-list" class="bg-gray-100 p-2 rounded-lg h-40 overflow-y-auto border border-gray-200">
+                        <!-- Commands will be added here by JS -->
+                    </div>
+                </div>
+                <!-- All control buttons are now here -->
+                <div>
+                    <h3 class="text-lg font-bold text-gray-700 mb-2">Controls</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="forward-btn" class="col-span-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg button-shadow transition-all">Forward ↑</button>
+                        <button id="left-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg button-shadow transition-all">Turn Left ↺</button>
+                        <button id="right-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg button-shadow transition-all">Turn Right ↻</button>
+                        <button id="play-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg button-shadow transition-all">Play ▶</button>
+                        <button id="clear-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg button-shadow transition-all">Clear X</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle Column: Game Canvas -->
+            <div class="md:col-span-2 bg-white p-4 rounded-xl shadow-lg">
+                <canvas id="gameCanvas" class="w-full h-auto rounded-lg bg-yellow-50"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Message Modal -->
+    <div id="message-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center transform transition-all scale-95">
+            <h2 id="message-text" class="text-4xl font-fredoka"></h2>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const commandListDiv = document.getElementById('command-list');
+        const challengeTitle = document.getElementById('challenge-title');
+        const challengeText = document.getElementById('challenge-text');
+        const messageModal = document.getElementById('message-modal');
+        const messageText = document.getElementById('message-text');
+
+        // --- Game Configuration ---
+        const GRID_SIZE = 60;
+        const NUM_COLS = 10;
+        const NUM_ROWS = 8;
+        canvas.width = NUM_COLS * GRID_SIZE;
+        canvas.height = NUM_ROWS * GRID_SIZE;
+
+        const levelConfig = {
+            1: {
+                fidoStart: { x: 1, y: 4 },
+                kentePos: { x: 4, y: 4 },
+                fidoDir: 'right',
+                obstacles: []
+            },
+            2: {
+                fidoStart: { x: 1, y: 1 },
+                kentePos: { x: 3, y: 3 },
+                fidoDir: 'right',
+                obstacles: []
+            },
+            3: { // NEW Intermediate Level 3
+                fidoStart: { x: 1, y: 5 },
+                kentePos: { x: 5, y: 5 },
+                fidoDir: 'up',
+                obstacles: [
+                    { x: 1, y: 4 }, { x: 2, y: 4 }, { x: 3, y: 4 }, { x: 4, y: 4 }, { x: 5, y: 4 }
+                ]
+            },
+            4: { // OLD Level 3 is now NEW Level 4
+                fidoStart: { x: 1, y: 6 },
+                kentePos: { x: 6, y: 4 },
+                fidoDir: 'right',
+                obstacles: [
+                    { x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 },
+                    { x: 4, y: 5 }, { x: 4, y: 6 }, { x: 0, y: 2 }, { x: 1, y: 2 },
+                    { x: 6, y: 1 }, { x: 7, y: 1 }, { x: 8, y: 1 }
+                ]
+            }
+        };
+
+        // --- Game State ---
+        let currentLevel = 1;
+        let commandSequence = [];
+        let fido = { x: 0, y: 0, dir: 'right' };
+        let kente = { x: 0, y: 0 };
+        let obstacles = [];
+        let isExecuting = false;
+        const directions = ['right', 'down', 'left', 'up'];
+
+        // --- Drawing Functions ---
+        function drawGrid() {
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < NUM_COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID_SIZE, 0);
+                ctx.lineTo(i * GRID_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let j = 0; j < NUM_ROWS; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * GRID_SIZE);
+                ctx.lineTo(canvas.width, j * GRID_SIZE);
+                ctx.stroke();
+            }
+        }
+
+        function drawFido() {
+            const fidoX = fido.x * GRID_SIZE + GRID_SIZE / 2;
+            const fidoY = fido.y * GRID_SIZE + GRID_SIZE / 2;
+            ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.save();
+            ctx.translate(fidoX, fidoY);
+            
+            switch(fido.dir) {
+                case 'right':
+                    ctx.scale(-1, 1);
+                    break;
+                case 'up':
+                    ctx.rotate(Math.PI / 2);
+                    break;
+                case 'down':
+                    ctx.rotate(-Math.PI / 2);
+                    break;
+            }
+            ctx.fillText('🐘', 0, 0);
+            ctx.restore();
+        }
+        
+        function drawObstacles() {
+            ctx.font = `${GRID_SIZE * 0.6}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            obstacles.forEach(obs => {
+                const obsX = obs.x * GRID_SIZE + GRID_SIZE / 2;
+                const obsY = obs.y * GRID_SIZE + GRID_SIZE / 2;
+                ctx.fillText('🪨', obsX, obsY);
+            });
+        }
+
+        function drawKente() {
+            const kenteX = kente.x * GRID_SIZE;
+            const kenteY = kente.y * GRID_SIZE;
+            ctx.fillStyle = '#f59e0b';
+            ctx.fillRect(kenteX + 5, kenteY + 5, GRID_SIZE - 10, GRID_SIZE - 10);
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(kenteX + 15, kenteY + 15, 10, 30);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(kenteX + 35, kenteY + 15, 10, 30);
+        }
+
+        function renderGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+            drawObstacles();
+            drawKente();
+            drawFido();
+        }
+
+        // --- UI and Game Flow ---
+        function removeCommand(index) {
+            if (isExecuting) return;
+            commandSequence.splice(index, 1);
+            updateCommandList();
+        }
+
+        function updateCommandList() {
+            commandListDiv.innerHTML = '';
+            commandSequence.forEach((cmd, index) => {
+                const item = document.createElement('div');
+                item.className = 'command-item';
+                
+                const commandText = document.createElement('span');
+                let icon = '';
+                if (cmd === 'forward') icon = '↑';
+                if (cmd === 'left') icon = '↺';
+                if (cmd === 'right') icon = '↻';
+                commandText.textContent = `${index + 1}. ${cmd.charAt(0).toUpperCase() + cmd.slice(1)} ${icon}`;
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '×';
+                removeBtn.className = 'remove-btn';
+                removeBtn.onclick = () => removeCommand(index);
+                
+                item.appendChild(commandText);
+                item.appendChild(removeBtn);
+                commandListDiv.appendChild(item);
+            });
+        }
+
+        function showMessage(text, duration = 2000) {
+            messageText.textContent = text;
+            messageModal.classList.remove('hidden');
+            setTimeout(() => {
+                messageModal.classList.add('hidden');
+            }, duration);
+        }
+
+        function setupLevel(level) {
+            currentLevel = level;
+            // Check if we've completed all levels
+            if (level > Object.keys(levelConfig).length) {
+                challengeTitle.textContent = "You Win!";
+                challengeText.textContent = "Restarting the game...";
+                isExecuting = true; // Lock controls while message shows
+                showMessage("Congratulations!", 3000);
+                // After the message, restart from level 1
+                setTimeout(() => {
+                    setupLevel(1);
+                }, 3000);
+                return;
+            }
+
+            const config = levelConfig[level];
+            fido.x = config.fidoStart.x;
+            fido.y = config.fidoStart.y;
+            fido.dir = config.fidoDir;
+            kente.x = config.kentePos.x;
+            kente.y = config.kentePos.y;
+            obstacles = config.obstacles;
+            
+            commandSequence = [];
+            updateCommandList();
+            challengeTitle.textContent = `Level ${level}`;
+            isExecuting = false;
+            renderGame();
+        }
+        
+        function isObstacleAt(x, y) {
+            return obstacles.some(obs => obs.x === x && obs.y === y);
+        }
+        
+        async function executeSequence() {
+            if (isExecuting || commandSequence.length === 0) return;
+            isExecuting = true;
+
+            for (const command of commandSequence) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                if (command === 'forward') {
+                    let nextX = fido.x;
+                    let nextY = fido.y;
+
+                    if (fido.dir === 'right') nextX++;
+                    else if (fido.dir === 'left') nextX--;
+                    else if (fido.dir === 'down') nextY++;
+                    else if (fido.dir === 'up') nextY--;
+
+                    if (nextX < 0 || nextX >= NUM_COLS || nextY < 0 || nextY >= NUM_ROWS || isObstacleAt(nextX, nextY)) {
+                        showMessage("Bonk! Try again.");
+                        setTimeout(() => setupLevel(currentLevel), 2000);
+                        return;
+                    }
+                    fido.x = nextX;
+                    fido.y = nextY;
+                } else {
+                    const currentDirIndex = directions.indexOf(fido.dir);
+                    if (command === 'right') {
+                        fido.dir = directions[(currentDirIndex + 1) % 4];
+                    } else if (command === 'left') {
+                        fido.dir = directions[(currentDirIndex + 3) % 4];
+                    }
+                }
+                renderGame();
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+            checkWinCondition();
+        }
+
+        function checkWinCondition() {
+            if (fido.x === kente.x && fido.y === kente.y) {
+                showMessage("You did it!");
+                setTimeout(() => setupLevel(currentLevel + 1), 2000);
+            } else {
+                showMessage("Not quite! Try again.");
+                setTimeout(() => setupLevel(currentLevel), 2000);
+            }
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('forward-btn').addEventListener('click', () => {
+            if (isExecuting) return;
+            commandSequence.push('forward');
+            updateCommandList();
+        });
+
+        document.getElementById('left-btn').addEventListener('click', () => {
+            if (isExecuting) return;
+            commandSequence.push('left');
+            updateCommandList();
+        });
+
+        document.getElementById('right-btn').addEventListener('click', () => {
+            if (isExecuting) return;
+            commandSequence.push('right');
+            updateCommandList();
+        });
+
+        document.getElementById('play-btn').addEventListener('click', executeSequence);
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            if (isExecuting) return;
+            commandSequence = [];
+            updateCommandList();
+        });
+
+        // --- Initialisation ---
+        window.onload = () => {
+            setupLevel(1);
+        };
+    </script>
+</body>
+</html>
